@@ -14,8 +14,22 @@ pub fn warmup_window_active(w: &WindowUsage, window_secs: i64, now: i64) -> bool
     if w.used_percent.unwrap_or(0.0) <= 0.0 {
         return false;
     }
+    let window_secs = w
+        .window_minutes
+        .map_or(window_secs, |minutes| minutes.saturating_mul(60));
     let elapsed = window_secs - (resets_at - now);
     elapsed >= MIN_WARMUP_ELAPSED_SECS
+}
+
+pub(crate) fn rate_limit_warmup_active(
+    primary: Option<&WindowUsage>,
+    secondary: Option<&WindowUsage>,
+    now: i64,
+) -> bool {
+    match primary {
+        Some(w) => warmup_window_active(w, WINDOW_5H_SECS, now),
+        None => secondary.is_some_and(|w| warmup_window_active(w, WINDOW_7D_SECS, now)),
+    }
 }
 
 /// Decide whether warmup should be skipped because the relevant window is already active.
@@ -25,13 +39,7 @@ pub fn warmup_window_active(w: &WindowUsage, window_secs: i64, now: i64) -> bool
 /// warmup once the 5h window has closed. Free accounts only have the 7d window, so it
 /// is the only signal available.
 pub fn usage_has_active_warmup_window(u: &UsageInfo, now: i64) -> bool {
-    let main_active = match u.primary.as_ref() {
-        Some(w) => warmup_window_active(w, WINDOW_5H_SECS, now),
-        None => u
-            .secondary
-            .as_ref()
-            .is_some_and(|w| warmup_window_active(w, WINDOW_7D_SECS, now)),
-    };
+    let main_active = rate_limit_warmup_active(u.primary.as_ref(), u.secondary.as_ref(), now);
     let additional_active = u
         .additional_limits
         .iter()
@@ -45,13 +53,7 @@ pub fn usage_has_active_warmup_window(u: &UsageInfo, now: i64) -> bool {
             if limit.allowed == Some(false) || limit.limit_reached == Some(true) {
                 return true;
             }
-            match limit.primary.as_ref() {
-                Some(w) => warmup_window_active(w, WINDOW_5H_SECS, now),
-                None => limit
-                    .secondary
-                    .as_ref()
-                    .is_some_and(|w| warmup_window_active(w, WINDOW_7D_SECS, now)),
-            }
+            rate_limit_warmup_active(limit.primary.as_ref(), limit.secondary.as_ref(), now)
         });
     main_active && additional_active
 }
@@ -1053,5 +1055,39 @@ mod tests {
             ..Default::default()
         };
         assert!(usage_has_active_warmup_window(&u, now));
+    }
+
+    #[test]
+    fn test_model_pool_uses_its_own_window_length() {
+        let now = 1_000_000i64;
+        let u = UsageInfo {
+            primary: Some(WindowUsage {
+                used_percent: Some(20.0),
+                resets_at: Some(now + WINDOW_5H_SECS - 600),
+                window_minutes: Some(300),
+            }),
+            additional_limits: vec![super::super::AdditionalRateLimit {
+                limit_name: Some("GPT-6-Luna".to_string()),
+                metered_feature: Some("codex_luna".to_string()),
+                allowed: Some(true),
+                limit_reached: Some(false),
+                primary: Some(WindowUsage {
+                    used_percent: Some(1.0),
+                    resets_at: Some(now + 3_000),
+                    window_minutes: Some(60),
+                }),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        assert!(usage_has_active_warmup_window(&u, now));
+        let mut reset = u;
+        reset.additional_limits[0]
+            .primary
+            .as_mut()
+            .unwrap()
+            .resets_at = Some(now - 1);
+        assert!(!usage_has_active_warmup_window(&reset, now));
     }
 }

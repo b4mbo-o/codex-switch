@@ -1037,7 +1037,11 @@ fn installer_instructions_use_channel_matched_release_assets() {
 
     for path in ["README.md", "README_CN.md"] {
         let readme = repo_file(path);
-        for required in [stable_unix, stable_windows, dev_unix, dev_windows] {
+        for required in [
+            "cargo install --git https://github.com/b4mbo-o/codex-switch.git --locked --force",
+            dev_unix,
+            dev_windows,
+        ] {
             assert!(
                 readme.contains(required),
                 "{path} must contain channel-matched installer URL `{required}`"

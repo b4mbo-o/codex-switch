@@ -6,6 +6,7 @@ mod api;
 mod parse;
 mod reset_credits;
 mod scoring;
+pub(crate) use scoring::rate_limit_warmup_active;
 
 pub(crate) use api::{apply_account_routing_headers, do_refresh_token};
 pub use api::{

@@ -510,7 +510,7 @@ async fn warmup_additional_models(
     for model in additional_models {
         let body = build_body(model);
         debug!("warmup additional pool POST → {RESPONSES_URL} (model={model})");
-        let mut resp = make_request(client, access_token, account_id, is_fedramp, &body)
+        let resp = make_request(client, access_token, account_id, is_fedramp, &body)
             .send()
             .await
             .map_err(|e| crate::auth::format_reqwest_error("additional warmup failed", &e))?;
@@ -520,8 +520,17 @@ async fn warmup_additional_models(
             let snippet: String = text.chars().take(160).collect();
             bail!("additional model {model}: HTTP {status} — {snippet}");
         }
-        let _ = resp.chunk().await;
+        finish_warmup_response(resp).await?;
     }
+    Ok(())
+}
+
+/// Keep the stream open until generation finishes. Dropping it after the first
+/// chunk can cancel the request before the server records any quota usage.
+async fn finish_warmup_response(resp: reqwest::Response) -> Result<()> {
+    resp.bytes()
+        .await
+        .map_err(|e| crate::auth::format_reqwest_error("warmup stream failed", &e))?;
     Ok(())
 }
 
@@ -598,8 +607,28 @@ pub async fn warmup_account(alias: &str, profile_path: &Path) -> Result<()> {
             }
         }
     };
-    let additional_limits = usage
-        .map(|usage| usage.additional_limits)
+    let now = crate::auth::now_unix_secs();
+    let warm_main = usage.as_ref().is_none_or(|usage| {
+        !crate::usage::rate_limit_warmup_active(
+            usage.primary.as_ref(),
+            usage.secondary.as_ref(),
+            now,
+        )
+    });
+    let additional_limits: Vec<_> = usage
+        .map(|usage| {
+            usage
+                .additional_limits
+                .into_iter()
+                .filter(|limit| {
+                    !crate::usage::rate_limit_warmup_active(
+                        limit.primary.as_ref(),
+                        limit.secondary.as_ref(),
+                        now,
+                    )
+                })
+                .collect()
+        })
         .unwrap_or_default();
     let val = crate::auth::read_auth(profile_path)
         .map_err(|e| anyhow::anyhow!("{alias}: cannot read auth: {e}"))?;
@@ -671,11 +700,21 @@ pub async fn warmup_account(alias: &str, profile_path: &Path) -> Result<()> {
     .with_context(|| format!("{alias}: failed to select a supported warmup model"))?;
     let (model, additional_models) = split_main_model(&selected_models)
         .with_context(|| format!("{alias}: failed to select a supported warmup model"))?;
+    if !warm_main {
+        return warmup_additional_models(
+            &client,
+            &access_token,
+            account_id.as_deref(),
+            is_fedramp,
+            additional_models,
+        )
+        .await;
+    }
     let body = build_body(model);
 
     debug!("[{alias}] warmup POST → {RESPONSES_URL} (model={model})");
 
-    let mut resp = make_request(
+    let resp = make_request(
         &client,
         &access_token,
         account_id.as_deref(),
@@ -691,9 +730,7 @@ pub async fn warmup_account(alias: &str, profile_path: &Path) -> Result<()> {
 
     match status.as_u16() {
         200 => {
-            // Quota window is triggered server-side on request receipt.
-            // Read one chunk to confirm streaming started, then drop.
-            let _ = resp.chunk().await;
+            finish_warmup_response(resp).await?;
             warmup_additional_models(
                 &client,
                 &access_token,
@@ -728,7 +765,7 @@ pub async fn warmup_account(alias: &str, profile_path: &Path) -> Result<()> {
                         format!("{alias}: failed to refresh the supported warmup model")
                     })?;
                 let retry_body = build_body(new_model);
-                let mut retry_resp = make_request(
+                let retry_resp = make_request(
                     &client,
                     &access_token,
                     account_id.as_deref(),
@@ -740,7 +777,7 @@ pub async fn warmup_account(alias: &str, profile_path: &Path) -> Result<()> {
                 .map_err(|e| crate::auth::format_reqwest_error("warmup retry failed", &e))?;
                 let retry_status = retry_resp.status();
                 if retry_status.is_success() {
-                    let _ = retry_resp.chunk().await;
+                    finish_warmup_response(retry_resp).await?;
                     return warmup_additional_models(
                         &client,
                         &access_token,
@@ -780,7 +817,7 @@ pub async fn warmup_account(alias: &str, profile_path: &Path) -> Result<()> {
                 {
                     Ok(refreshed) => {
                         persist_refreshed_tokens(alias, rt, &refreshed)?;
-                        let mut retry_resp = make_request(
+                        let retry_resp = make_request(
                             &client,
                             &refreshed.access_token,
                             account_id.as_deref(),
@@ -794,7 +831,7 @@ pub async fn warmup_account(alias: &str, profile_path: &Path) -> Result<()> {
                         })?;
                         let retry_status = retry_resp.status();
                         if retry_status.is_success() {
-                            let _ = retry_resp.chunk().await;
+                            finish_warmup_response(retry_resp).await?;
                             return warmup_additional_models(
                                 &client,
                                 &refreshed.access_token,
@@ -2261,6 +2298,105 @@ mod tests {
                 "the second warmup must open a quota window for the main pool AND the pool \
                  the account just gained"
             );
+        }
+
+        #[allow(clippy::await_holding_lock)]
+        #[tokio::test]
+        async fn luna_reset_warms_only_luna_while_main_window_is_active() {
+            let _lock = ENV_LOCK.lock().await;
+            let _profile_env_lock = crate::profile::TEST_ENV_LOCK
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let home = tempfile::tempdir().unwrap();
+            let _codex_switch_home =
+                EnvVarGuard::set("CODEX_SWITCH_HOME", &home.path().display().to_string());
+            let alias = "luna-reset-only";
+            let profile_path = stage_writable_profile(home.path(), alias, &live_access_token());
+            let now = crate::auth::now_unix_secs();
+            crate::cache::put(
+                alias,
+                &crate::usage::UsageInfo {
+                    primary: Some(crate::usage::WindowUsage {
+                        used_percent: Some(20.0),
+                        resets_at: Some(now + 17_400),
+                        window_minutes: Some(300),
+                    }),
+                    additional_limits: vec![crate::usage::AdditionalRateLimit {
+                        limit_name: Some("GPT-6-Luna".to_string()),
+                        metered_feature: Some("codex_luna".to_string()),
+                        allowed: Some(true),
+                        limit_reached: Some(false),
+                        primary: Some(crate::usage::WindowUsage {
+                            used_percent: Some(0.0),
+                            resets_at: None,
+                            window_minutes: Some(60),
+                        }),
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                },
+            );
+
+            let requests = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+            let seen = requests.clone();
+            let app = Router::new()
+                .route(
+                    "/codex/models",
+                    get(|| async {
+                        Json(serde_json::json!({"models": [
+                            {"slug": "gpt-6-mini", "supported_in_api": true},
+                            {"slug": "gpt-6-luna", "supported_in_api": true}
+                        ]}))
+                    }),
+                )
+                .route(
+                    "/codex/responses",
+                    post(move |Json(body): Json<serde_json::Value>| {
+                        let seen = seen.clone();
+                        async move {
+                            seen.lock()
+                                .unwrap()
+                                .push(body["model"].as_str().unwrap().to_string());
+                            (StatusCode::OK, "")
+                        }
+                    }),
+                );
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap();
+            tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+            let _models_url =
+                EnvVarGuard::set("CS_MODELS_URL", &format!("http://{addr}/codex/models"));
+            let _responses_url = EnvVarGuard::set(
+                "CS_RESPONSES_URL",
+                &format!("http://{addr}/codex/responses"),
+            );
+
+            warmup_account(alias, &profile_path).await.unwrap();
+            assert_eq!(*requests.lock().unwrap(), vec!["gpt-6-luna"]);
+        }
+
+        #[tokio::test]
+        async fn incomplete_warmup_stream_is_an_error() {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap();
+            tokio::spawn(async move {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut request = [0u8; 1024];
+                let _ = socket.read(&mut request).await.unwrap();
+                socket
+                    .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 20\r\n\r\nshort")
+                    .await
+                    .unwrap();
+            });
+
+            let response = reqwest::Client::new()
+                .get(format!("http://{addr}/"))
+                .send()
+                .await
+                .unwrap();
+            assert!(finish_warmup_response(response).await.is_err());
         }
     }
 }

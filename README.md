@@ -14,19 +14,21 @@ Codex must use its file credential store. If needed, add this to `$CODEX_HOME/co
 cli_auth_credentials_store = "file"
 ```
 
-Install the stable release — macOS / Linux:
+Install this fork from source (Rust 1.88 or newer) — macOS / Linux:
 
 ```bash
-curl -fsSL https://github.com/xjoker/codex-switch/releases/latest/download/install.sh | bash
+cargo install --git https://github.com/b4mbo-o/codex-switch.git --locked --force --root "$HOME/.local"
 ```
 
 Windows PowerShell:
 
 ```powershell
-irm https://github.com/xjoker/codex-switch/releases/latest/download/install.ps1 | iex
+cargo install --git https://github.com/b4mbo-o/codex-switch.git --locked --force
 ```
 
-Homebrew users: `brew install xjoker/tap/codex-switch`.
+On Windows, ensure `%USERPROFILE%\.cargo\bin` is on `PATH`. If an upstream installation is also present, check which binary runs with `where.exe codex-switch`.
+
+Rerun the same `cargo install` command to update this fork; `self-update` uses the upstream release channel.
 
 > **Note:** this project is not distributed on crates.io — do not `cargo install codex-switch`; that package name belongs to an unrelated project.
 
