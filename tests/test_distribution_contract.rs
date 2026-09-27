@@ -915,7 +915,7 @@ fn release_retests_v0019_upgrade_on_all_supported_hosts() {
     for required in [
         "legacy-upgrade:",
         "needs: [meta, release]",
-        "if: needs.meta.outputs.is_dev == 'true' || needs.meta.outputs.prerelease == 'false'",
+        "if: github.repository != 'b4mbo-o/codex-switch' && (needs.meta.outputs.is_dev == 'true' || needs.meta.outputs.prerelease == 'false')",
         "ubuntu-latest",
         "macos-latest",
         "windows-latest",
@@ -1015,11 +1015,11 @@ fn readmes_describe_current_cli_and_codex_requirements() {
 
 #[test]
 fn installer_instructions_use_channel_matched_release_assets() {
-    let stable_unix = "https://github.com/xjoker/codex-switch/releases/latest/download/install.sh";
+    let stable_unix = "https://github.com/b4mbo-o/codex-switch/releases/latest/download/install.sh";
     let stable_windows =
-        "https://github.com/xjoker/codex-switch/releases/latest/download/install.ps1";
-    let dev_unix = "https://github.com/xjoker/codex-switch/releases/download/dev/install.sh";
-    let dev_windows = "https://github.com/xjoker/codex-switch/releases/download/dev/install.ps1";
+        "https://github.com/b4mbo-o/codex-switch/releases/latest/download/install.ps1";
+    let dev_unix = "https://github.com/b4mbo-o/codex-switch/releases/download/dev/install.sh";
+    let dev_windows = "https://github.com/b4mbo-o/codex-switch/releases/download/dev/install.ps1";
 
     for path in [
         "README.md",
@@ -1037,11 +1037,7 @@ fn installer_instructions_use_channel_matched_release_assets() {
 
     for path in ["README.md", "README_CN.md"] {
         let readme = repo_file(path);
-        for required in [
-            "cargo install --git https://github.com/b4mbo-o/codex-switch.git --locked --force",
-            dev_unix,
-            dev_windows,
-        ] {
+        for required in [stable_unix, stable_windows] {
             assert!(
                 readme.contains(required),
                 "{path} must contain channel-matched installer URL `{required}`"

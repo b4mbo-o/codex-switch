@@ -14,21 +14,20 @@ Codex 必须使用文件型凭据存储。如有需要，在 `$CODEX_HOME/config
 cli_auth_credentials_store = "file"
 ```
 
-从本分支源码安装（需要 Rust 1.88 或更新版本）— macOS / Linux：
+安装本分支 — macOS / Linux：
 
 ```bash
-cargo install --git https://github.com/b4mbo-o/codex-switch.git --locked --force --root "$HOME/.local"
+curl -fsSL https://github.com/b4mbo-o/codex-switch/releases/latest/download/install.sh | bash
 ```
 
 Windows PowerShell：
 
 ```powershell
-cargo install --git https://github.com/b4mbo-o/codex-switch.git --locked --force
+irm https://github.com/b4mbo-o/codex-switch/releases/latest/download/install.ps1 | iex
 ```
 
-Windows 用户需确保 `%USERPROFILE%\.cargo\bin` 在 `PATH` 中。如果还安装了上游版本，可用 `where.exe codex-switch` 检查实际运行的程序。
-
-更新本分支时请重新运行同一条 `cargo install` 命令；`self-update` 使用上游发布渠道。
+安装脚本会下载本分支的预编译程序并校验 SHA-256。更新时重新运行同一条命令即可。
+`self-update` 仍使用上游发布渠道；如需保留本分支版本，请重新运行此安装脚本。
 
 > **注意**：本项目不在 crates.io 分发——请勿 `cargo install codex-switch`，该包名属于另一个无关的同名项目。
 
