@@ -238,6 +238,7 @@ async fn dispatch(cmd: Commands, json: bool) -> Result<()> {
             Commands::Login { .. }
                 | Commands::Import { .. }
                 | Commands::SelfUpdate { .. }
+                | Commands::FixUntrusted
                 | Commands::Open
                 | Commands::Launch { .. }
         );
@@ -252,6 +253,27 @@ async fn dispatch(cmd: Commands, json: bool) -> Result<()> {
     let auth_handled = !matches!(auth_check, AuthCheckResult::NoChange);
 
     match cmd {
+        Commands::FixUntrusted => match auth::fix_untrusted_approval_policy()? {
+            Some(backup) => {
+                if json {
+                    output::print_json(
+                        &serde_json::json!({"ok": true, "changed": true, "backup": backup}),
+                    );
+                } else {
+                    user_println(&format!(
+                        "Removed retired approval_policy = \"untrusted\". Backup: {}. Restart Codex. Review approval settings before continuing.",
+                        backup.display()
+                    ));
+                }
+            }
+            None => {
+                if json {
+                    output::print_json(&serde_json::json!({"ok": true, "changed": false}));
+                } else {
+                    user_println("No retired approval_policy in the user Codex config.");
+                }
+            }
+        },
         Commands::Use {
             alias,
             consume_card,

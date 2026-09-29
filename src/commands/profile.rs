@@ -673,6 +673,10 @@ pub(crate) async fn select_best_profile(
 async fn best_cmd(json: bool, consume_card: bool) -> Result<()> {
     use std::io::IsTerminal;
 
+    // Fail before selecting or consuming a reset card if Codex cannot start
+    // with its current user configuration.
+    auth::codex_auth_path()?;
+
     let card_policy = if consume_card {
         CardPolicy::PreApproved
     } else if !json && std::io::stdin().is_terminal() {

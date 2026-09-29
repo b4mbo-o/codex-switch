@@ -10,6 +10,7 @@ The installed binary remains authoritative: use `codex-switch --help` and `codex
 | `import <path> [alias]` | Validate and import one `auth.json`, or recursively scan a directory for JSON files. The alias applies to single-file imports only; directories auto-assign aliases. |
 | `list [-f]` | Show profiles, usage, and availability; `-f` / `--force` bypasses the cache. |
 | `use [alias] [--consume-card]` | Switch explicitly, or omit the alias to auto-select with the unified scoring algorithm. When the pool is exhausted, `--consume-card` consumes the earliest-expiring reset card to revive an account (auto-select only; ignored when an alias is given). |
+| `fix-untrusted` | Back up the user Codex `config.toml` and remove its retired top-level `approval_policy = "untrusted"` setting. Restart Codex afterward. |
 | `launch [alias] [--consume-card] -- [args]` | Start Codex with the best (or specified) profile's auth. Everything after `--` is passed through to Codex. |
 | `reset-card <alias> [-y]` | Consume the earliest-expiring reset card for a profile after confirmation; `-y` / `--yes` skips the prompt. |
 | `warmup [alias]` | Send a minimal request to activate the quota-window countdown for one or all profiles. |

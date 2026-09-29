@@ -1,5 +1,9 @@
 # Changelog
 
+## v20260930.1.0 — 2026-09-30
+
+- **Repair retired Codex approval settings** — `codex-switch fix-untrusted` backs up the user Codex config and removes the unsupported top-level `approval_policy = "untrusted"` entry while retaining other settings. Account switching now reports this condition with the repair command instead of reporting success while Codex cannot start. Restart Codex after repair and review the resulting approval behavior.
+
 ## v20260804.1.0 — 2026-08-04
 
 - **`self-update --version` rejects anything that is not a version number** — The argument becomes a path segment in a GitHub release lookup, and `..` inside a URL path is resolved rather than treated as text, so a malformed value could have pointed the lookup at another repository's release metadata. The value is now both percent-encoded and rejected outright before any request is made, and a typo is reported as a bad argument instead of surfacing as a confusing 404.

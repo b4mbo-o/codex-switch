@@ -37,6 +37,9 @@ pub(crate) async fn launch_cmd(
 ) -> Result<()> {
     use std::io::IsTerminal;
 
+    // The selection path can consume a reset card; validate Codex's config first.
+    let codex_auth = auth::codex_auth_path()?;
+
     let mut revival_hint = None;
     let target_alias = match alias {
         Some(alias) => {
@@ -75,7 +78,6 @@ pub(crate) async fn launch_cmd(
         Err(_) => anyhow::bail!("codex not found in PATH. Install: npm install -g @openai/codex"),
     }
 
-    let codex_auth = auth::codex_auth_path()?;
     // Unique per-invocation backup name (PID + timestamp): prevents two
     // concurrent `launch` commands from clobbering each other's backup.
     let backup = codex_auth.with_extension(format!(

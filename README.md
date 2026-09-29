@@ -28,6 +28,7 @@ irm https://github.com/b4mbo-o/codex-switch/releases/latest/download/install.ps1
 
 The installers download this fork's prebuilt binaries and check their SHA-256 hashes. Run the same command again to update.
 `self-update` still follows upstream releases; rerun this installer to stay on this fork.
+If Codex reports `approval_policy = "untrusted" is no longer supported`, run `codex-switch fix-untrusted` once and restart Codex. The command backs up your Codex config before removing that retired setting.
 
 > **Note:** this project is not distributed on crates.io — do not `cargo install codex-switch`; that package name belongs to an unrelated project.
 

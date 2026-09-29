@@ -6,6 +6,7 @@ Start with the complete error message, its file path, and the command that produ
 |---|---|
 | No saved profiles | Run `codex-switch login` or `codex-switch import <path>`. |
 | Credential store is not file-backed | Set `cli_auth_credentials_store = "file"` in `$CODEX_HOME/config.toml`. |
+| Codex reports `approval_policy = "untrusted" is no longer supported` | Run `codex-switch fix-untrusted` to back up and repair the user `$CODEX_HOME/config.toml`, then restart Codex. This removes the retired approval setting and may change when Codex requests approval. If the error remains, inspect project config, profile files, startup flags, or managed settings. |
 | Headless login cannot open a browser | Run `codex-switch login --device`. |
 | Windows daemon installation is denied | Open PowerShell as Administrator and retry. |
 | Windows daemon stop says credential work is still in flight | Wait briefly and run `codex-switch daemon stop` again. The process is intentionally left running instead of force-killed while a refresh token may be rotating. |

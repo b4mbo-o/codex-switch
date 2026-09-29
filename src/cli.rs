@@ -70,6 +70,8 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Remove Codex's retired approval_policy = "untrusted" from the user config
+    FixUntrusted,
     /// Switch to a profile; omit alias to auto-select using the unified scoring algorithm
     Use {
         /// Profile alias (omit to auto-select)

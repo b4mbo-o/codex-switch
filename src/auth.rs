@@ -77,6 +77,14 @@ fn validate_cli_auth_credentials_store(codex_home: &Path) -> Result<()> {
         return Ok(());
     };
 
+    if config.get("approval_policy").and_then(|v| v.as_str()) == Some("untrusted") {
+        anyhow::bail!(
+            "Codex no longer supports approval_policy = \"untrusted\" in {}; \
+             run `codex-switch fix-untrusted` before switching",
+            config_path.display()
+        );
+    }
+
     match config.get("cli_auth_credentials_store") {
         None => {}
         Some(toml::Value::String(mode)) if mode == "file" => {}
@@ -93,6 +101,34 @@ fn validate_cli_auth_credentials_store(codex_home: &Path) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// Remove only the retired top-level setting. The command is explicit because
+/// dropping this setting changes when Codex asks for command approval.
+pub fn fix_untrusted_approval_policy() -> Result<Option<PathBuf>> {
+    let codex_home = codex_home_from_values(std::env::var_os("CODEX_HOME"), dirs::home_dir())?;
+    fix_untrusted_approval_policy_in(&codex_home.join("config.toml"))
+}
+
+fn fix_untrusted_approval_policy_in(path: &Path) -> Result<Option<PathBuf>> {
+    if !path.exists() {
+        return Ok(None);
+    }
+    let original =
+        std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    let mut document: toml_edit::DocumentMut = original
+        .parse()
+        .with_context(|| format!("parsing {}", path.display()))?;
+    if document.get("approval_policy").and_then(|v| v.as_str()) != Some("untrusted") {
+        return Ok(None);
+    }
+    document.remove("approval_policy");
+    let backup = allocate_backup_path_with_extension(path, "toml")?;
+    atomic_write_private(&backup, original.as_bytes())
+        .with_context(|| format!("backing up {}", path.display()))?;
+    atomic_write_private(path, document.to_string().as_bytes())
+        .with_context(|| format!("updating {} (backup: {})", path.display(), backup.display()))?;
+    Ok(Some(backup))
 }
 
 fn load_codex_config(codex_home: &Path) -> Result<Option<(PathBuf, toml::Value)>> {
@@ -550,15 +586,19 @@ pub fn backup_auth(path: &Path) -> Result<()> {
 /// legacy seconds names, because the leading ten digits of a nanosecond stamp
 /// are that same second, so the shorter name compares as the earlier one.
 fn allocate_backup_path(path: &Path) -> Result<PathBuf> {
+    allocate_backup_path_with_extension(path, "json")
+}
+
+fn allocate_backup_path_with_extension(path: &Path, extension: &str) -> Result<PathBuf> {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .context("system clock is before the Unix epoch")?
         .as_nanos();
     for collision in 0..1000u16 {
         let candidate = if collision == 0 {
-            path.with_extension(format!("json.bak.{nanos}"))
+            path.with_extension(format!("{extension}.bak.{nanos}"))
         } else {
-            path.with_extension(format!("json.bak.{nanos}-{collision}"))
+            path.with_extension(format!("{extension}.bak.{nanos}-{collision}"))
         };
         if !candidate.exists() {
             return Ok(candidate);
@@ -1061,6 +1101,35 @@ mod tests {
         )
         .unwrap();
 
+        validate_cli_auth_credentials_store(dir.path()).unwrap();
+    }
+
+    #[test]
+    fn retired_approval_policy_is_detected_before_switching() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("config.toml"),
+            "cli_auth_credentials_store = \"file\"\napproval_policy = \"untrusted\"\n",
+        )
+        .unwrap();
+        let error = validate_cli_auth_credentials_store(dir.path()).unwrap_err();
+        assert!(error.to_string().contains("codex-switch fix-untrusted"));
+    }
+
+    #[test]
+    fn fix_untrusted_preserves_other_settings_and_creates_backup() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        let original = "# keep this comment\nmodel = \"gpt-5\"\napproval_policy = \"untrusted\" # retired\ncli_auth_credentials_store = \"file\"\n[projects.\"/repo\"]\ntrust_level = \"untrusted\"\n";
+        std::fs::write(&path, original).unwrap();
+
+        let backup = fix_untrusted_approval_policy_in(&path).unwrap().unwrap();
+        let updated = std::fs::read_to_string(&path).unwrap();
+        assert!(!updated.contains("approval_policy"));
+        assert!(updated.contains("# keep this comment"));
+        assert!(updated.contains("trust_level = \"untrusted\""));
+        assert_eq!(std::fs::read_to_string(&backup).unwrap(), original);
+        assert!(fix_untrusted_approval_policy_in(&path).unwrap().is_none());
         validate_cli_auth_credentials_store(dir.path()).unwrap();
     }
 
