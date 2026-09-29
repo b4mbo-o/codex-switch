@@ -3,6 +3,7 @@
 ## v20260930.1.0 — 2026-09-30
 
 - **Repair retired Codex approval settings** — `codex-switch fix-untrusted` backs up the user Codex config and removes the unsupported top-level `approval_policy = "untrusted"` entry while retaining other settings. Account switching now reports this condition with the repair command instead of reporting success while Codex cannot start. Restart Codex after repair and review the resulting approval behavior.
+- **Dependency security updates** — Refresh locked `rustls` and `webbrowser` versions to resolve the advisory findings reported by `cargo audit`.
 
 ## v20260804.1.0 — 2026-08-04
 
