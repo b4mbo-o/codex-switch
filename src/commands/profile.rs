@@ -34,11 +34,21 @@ pub(crate) async fn use_cmd(alias: Option<&str>, json: bool, consume_card: bool)
                     alias: a.to_string(),
                     action: "switched".into(),
                 });
+            } else {
+                print_codex_resume_hint();
             }
         }
         None => best_cmd(json, consume_card).await?,
     }
     Ok(())
+}
+
+fn print_codex_resume_hint() {
+    if super::codex_supports_no_daemon() {
+        user_println(
+            "To resume with this profile, run `codex resume --no-daemon`; a shared Codex daemon may still hold the previous account.",
+        );
+    }
 }
 
 // ── list (all profiles + usage, concurrent) ──────────────
@@ -711,6 +721,7 @@ async fn best_cmd(json: bool, consume_card: bool) -> Result<()> {
     } else {
         println!("{}", color::success(&format!("Switched to: {best_alias}")));
         print_usage_line(&best_usage);
+        print_codex_resume_hint();
         if let Some(hint) = &revival_hint {
             println!("  {}", color::dim(&revival_hint_message(hint)));
         }

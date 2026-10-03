@@ -213,6 +213,54 @@ fn json_use_keeps_stdout_machine_readable() {
     let _ = fs::remove_dir_all(home);
 }
 
+#[cfg(unix)]
+#[test]
+fn launch_resume_bypasses_a_shared_codex_daemon() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let home = temp_home("launch-no-daemon");
+    write_json(
+        home.join(".codex-switch/profiles/alice/auth.json"),
+        &auth_json("alice@example.com", "acct_alice"),
+    );
+    fs::create_dir_all(home.join("bin")).unwrap();
+    let fake_codex = home.join("bin/codex");
+    fs::write(
+        &fake_codex,
+        "#!/bin/sh\nif [ \"$1\" = --help ]; then echo --no-daemon; exit 0; fi\nif [ \"$1\" = --version ]; then exit 0; fi\nprintf '%s\\n' \"$@\" > \"$CS_TEST_ARGS\"\n",
+    )
+    .unwrap();
+    fs::set_permissions(&fake_codex, fs::Permissions::from_mode(0o755)).unwrap();
+    fs::write(
+        home.join(".codex-switch/config.toml"),
+        "[launch]\nrestore_delay_secs = 1\n",
+    )
+    .unwrap();
+    let args_file = home.join("codex-args");
+    let path = format!(
+        "{}:{}",
+        home.join("bin").display(),
+        std::env::var("PATH").unwrap()
+    );
+    let output = command(&home, &["launch", "alice", "--", "resume", "--last"])
+        .env("PATH", path)
+        .env("CS_TEST_ARGS", &args_file)
+        .output()
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(args_file).unwrap(),
+        "--no-daemon\nresume\n--last\n"
+    );
+    assert!(!home.join(".codex/auth.json").exists());
+    let _ = fs::remove_dir_all(home);
+}
+
 #[test]
 fn json_use_rejects_untracked_live_auth_without_prompting() {
     let home = temp_home("json-use-untracked");

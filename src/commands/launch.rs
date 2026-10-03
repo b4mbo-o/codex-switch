@@ -144,8 +144,19 @@ pub(crate) async fn launch_cmd(
         user_println(&format!("Launching codex with profile '{target_alias}'..."));
     }
 
+    // The shared Codex daemon can retain credentials from before this auth
+    // staging window. A private server reads the staged profile at startup.
+    let mut codex_args = Vec::with_capacity(args.len() + 1);
+    if super::codex_supports_no_daemon()
+        && !args
+            .iter()
+            .any(|arg| arg == "--no-daemon" || arg == "--remote" || arg.starts_with("--remote="))
+    {
+        codex_args.push("--no-daemon".to_string());
+    }
+    codex_args.extend(args);
     let child_result = std::process::Command::new("codex")
-        .args(&args)
+        .args(&codex_args)
         .stdin(std::process::Stdio::inherit())
         .stdout(std::process::Stdio::inherit())
         .stderr(std::process::Stdio::inherit())
