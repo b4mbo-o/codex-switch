@@ -46,7 +46,7 @@ pub(crate) async fn use_cmd(alias: Option<&str>, json: bool, consume_card: bool)
 fn print_codex_resume_hint() {
     if super::codex_supports_no_daemon() {
         user_println(
-            "Start a new conversation with `codex --no-daemon`. If an older conversation is locked by another Codex process, `codex fork --no-daemon` can copy its history into a new conversation.",
+            "Start a new conversation with `codex --no-daemon`. To resume the same conversation under this profile, first close it in its current app; a shared Codex daemon may keep it locked after the app closes.",
         );
     }
 }
