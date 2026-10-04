@@ -78,7 +78,7 @@ codex-switch use         # switch to the best eligible account
 codex-switch launch      # select, start Codex, restore auth afterwards
 ```
 
-`use` without an alias ranks all accounts with the adaptive scoring algorithm; `use <alias>` switches explicitly. After a manual switch, run `codex resume --no-daemon` to resume with the selected account. Recent Codex versions can otherwise reuse a shared daemon with the previous account. `launch` handles staging and restoration and bypasses that daemon when supported.
+`use` without an alias ranks all accounts with the adaptive scoring algorithm; `use <alias>` switches explicitly. After a manual switch, run `codex --no-daemon` for a new conversation. Recent Codex versions can otherwise reuse a shared daemon with the previous account. To continue from a saved conversation when `resume --no-daemon` reports that it is open elsewhere, run `codex fork --no-daemon` to create a new conversation with its history. `launch` handles staging and restoration and bypasses the shared daemon when supported.
 
 ## Where your data lives
 

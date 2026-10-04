@@ -6,7 +6,7 @@ No, and this is permanent by design. OS keyrings provide no locking or atomic-re
 
 ## Does switching affect an already-running Codex session?
 
-No. Codex reads authentication at startup. Recent Codex versions can also reuse a shared daemon that holds the previous account. After `codex-switch use`, run `codex --no-daemon` for a new session or `codex resume --no-daemon` to resume with the selected account. `codex-switch launch` bypasses the shared daemon when supported. Already-running sessions keep their account.
+No. Codex reads authentication at startup. Recent Codex versions can also reuse a shared daemon that holds the previous account. After `codex-switch use`, run `codex --no-daemon` for a new conversation. To carry an older conversation's history into the selected account, use `codex fork --no-daemon` (or `codex-switch launch <alias> -- fork`); this creates a new conversation. `resume --no-daemon` can report "This conversation is open in another app" if the shared daemon or another client still owns that conversation. Resuming the exact same conversation requires its current owner to release it. Other conversations can remain open.
 
 ## Where is account data stored?
 
