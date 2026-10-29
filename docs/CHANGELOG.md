@@ -3,6 +3,7 @@
 ## v20261029.1.0 — 2026-10-29
 
 - **Release package downloads have bounded waits** — Linux musl setup uses explicit APT connection/data timeouts and retries, with a ten-minute step limit, so an unavailable Ubuntu mirror cannot leave a release waiting for over an hour.
+- **Dependency security updates** — Refresh the audited TLS, QUIC, root-certificate and ZIP dependencies before publishing the stable release.
 - **Account switching refreshes Codex state** — Includes the existing master fixes for stale Codex daemon state and guidance about conversation locks when switching accounts.
 
 ## v20260930.1.0 — 2026-09-30
