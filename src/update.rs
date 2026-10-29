@@ -812,7 +812,10 @@ fn extract_zip_binary(archive_path: &Path, binary_name: &str, output_path: &Path
         let mut entry = archive
             .by_index(index)
             .with_context(|| format!("reading zip entry #{index}"))?;
-        let name = entry.name().replace('\\', "/");
+        let name = entry
+            .name()
+            .with_context(|| format!("decoding zip entry name #{index}"))?
+            .replace('\\', "/");
         if Path::new(&name)
             .file_name()
             .and_then(|value| value.to_str())
@@ -1037,6 +1040,33 @@ fn compare_versions(left: &str, right: &str) -> Option<std::cmp::Ordering> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn extracts_windows_binary_from_nested_zip_paths() {
+        use std::io::Write;
+
+        for entry_name in [
+            "target/release/codex-switch.exe",
+            r"target\release\codex-switch.exe",
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let archive_path = dir.path().join("release.zip");
+            let output_path = dir.path().join("extracted.exe");
+            let mut writer = zip::ZipWriter::new(fs::File::create(&archive_path).unwrap());
+            let options = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored);
+            writer.start_file("README.txt", options).unwrap();
+            writer.write_all(b"not the binary").unwrap();
+            writer.start_file(entry_name, options).unwrap();
+            writer.write_all(b"release binary").unwrap();
+            writer.finish().unwrap();
+
+            extract_zip_binary(&archive_path, "codex-switch.exe", &output_path).unwrap();
+
+            assert_eq!(fs::read(&output_path).unwrap(), b"release binary");
+            assert!(!dir.path().join("README.txt").exists());
+        }
+    }
 
     #[test]
     fn attestation_verification_pins_repository_workflow_and_release_ref() {
