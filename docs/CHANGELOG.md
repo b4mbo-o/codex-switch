@@ -1,5 +1,10 @@
 # Changelog
 
+## v20261029.1.0 — 2026-10-29
+
+- **Release package downloads have bounded waits** — Linux musl setup uses explicit APT connection/data timeouts and retries, with a ten-minute step limit, so an unavailable Ubuntu mirror cannot leave a release waiting for over an hour.
+- **Account switching refreshes Codex state** — Includes the existing master fixes for stale Codex daemon state and guidance about conversation locks when switching accounts.
+
 ## v20260930.1.0 — 2026-09-30
 
 - **Repair retired Codex approval settings** — `codex-switch fix-untrusted` backs up the user Codex config and removes the unsupported top-level `approval_policy = "untrusted"` entry while retaining other settings. Account switching now reports this condition with the repair command instead of reporting success while Codex cannot start. Restart Codex after repair and review the resulting approval behavior.

@@ -102,9 +102,12 @@ jobs:
 
       - name: Install musl tools (Linux x86_64)
         if: matrix.target == 'x86_64-unknown-linux-musl'
+        timeout-minutes: 10
         run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools
+          # Let APT fall back from an unavailable mirror without waiting indefinitely.
+          apt_options=(-o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
+          sudo apt-get "${apt_options[@]}" -o APT::Update::Error-Mode=any update
+          sudo apt-get "${apt_options[@]}" install -y --no-install-recommends musl-tools
 
       - name: Install cross (Linux ARM64 musl)
         if: matrix.target == 'aarch64-unknown-linux-musl'
